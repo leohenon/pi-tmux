@@ -11,13 +11,13 @@ Tmux tools for [pi](https://github.com/badlogic/pi-mono) to run long-running com
 ## Installation
 
 ```bash
-pi install git:github.com/offline-ant/pi-tmux
+pi install git:github.com/leohenon/pi-tmux
 ```
 
 Or try without installing:
 
 ```bash
-pi -e git:github.com/offline-ant/pi-tmux
+pi -e git:github.com/leohenon/pi-tmux
 ```
 
 ## Tools
@@ -65,6 +65,7 @@ Blocked calls are denied before execution. Other work might be in progress; ask 
 ## Commands
 
 - `/tmux-list` lists active tmux panes
+- `/fork-split` forks the current pi session at the last user message and opens the fork in a 50/50 side-by-side tmux split (focus moves to the new pane). The fork branches *before* the last user message so you can type a replacement prompt. The new pane uses the pi-tmux lock convention, so it appears in `/tmux-list` and is controllable via `tmux-send`/`tmux-capture`/`tmux-kill`.
 - `/supervise <task>` spawns a supervised coding agent workflow: writes a task file to `./dev/scratch/<id>/task.md`, then turns the current agent into a supervisor that spawns a 'main' agent to do the work. The supervisor keeps the main agent on track, enforces the >78% context handoff rule, and ensures **architectural quality over speed** — nudging the main agent to investigate properly and build well-structured solutions rather than rushing to quick fixes. The main agent is unaware it has a supervisor.
 
 ## License

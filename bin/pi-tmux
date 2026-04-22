@@ -236,6 +236,65 @@ cmd_bash() {
   fi
 }
 
+cmd_split() {
+  require_tmux
+  ensure_lock_dir
+
+  local direction="-h"
+  local percent="50"
+  local focus_new=1
+  local requested_name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h) direction="-h"; shift ;;
+      -v) direction="-v"; shift ;;
+      -p) shift; percent="${1:-50}"; shift ;;
+      -p=*|--percent=*) percent="${1#*=}"; shift ;;
+      -d) focus_new=0; shift ;;
+      --) shift; break ;;
+      -*) echo "error: unknown flag: $1" >&2; return 1 ;;
+      *) requested_name="$1"; shift; break ;;
+    esac
+  done
+
+  [[ -n "$requested_name" ]] || { echo "error: split requires <lock-name>" >&2; return 1; }
+
+  local safe_name
+  safe_name="$(sanitize_name "$requested_name")"
+  [[ -n "$safe_name" ]] || { echo "error: invalid lock name" >&2; return 1; }
+
+  local lock_name
+  lock_name="$(find_unique_lock_name "$safe_name")"
+
+  local command="${*:-bash}"
+  local wrapped_command
+  wrapped_command="if ( ${command} ); then status=0; else status=\$?; fi; rm -f '$(lock_path "$lock_name")'; printf '%s\n' \"\${TMUX_PANE:-}\" > '$(idle_path "$lock_name")'; exit \$status"
+
+  local split_flags=("$direction" -l "${percent}%" -P -F '#{pane_id}' -e "PI_LOCK_NAME=$lock_name" -e "PATH=$PATH")
+  if (( focus_new == 0 )); then
+    split_flags+=(-d)
+  fi
+
+  local pane_id
+  if ! pane_id="$(tmux split-window "${split_flags[@]}" -- bash -c "$wrapped_command" 2>&1)"; then
+    echo "error: failed to create split pane: $pane_id" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$pane_id" > "$(lock_path "$lock_name")"
+  tmux set-option -g remain-on-exit on >/dev/null 2>&1 || true
+
+  echo "Created split '$lock_name' ($pane_id)"
+  echo "Command: $command"
+
+  if [[ "$lock_name" != "$safe_name" ]]; then
+    echo
+    echo "⚠️  WARNING: Lock name '$safe_name' was already in use — renamed to '$lock_name'."
+    echo "   Use semaphore_wait('$lock_name') to wait for this pane, NOT '$safe_name'."
+  fi
+}
+
 is_pane_in_copy_mode() {
   local pane="${1:-}"
   [[ -n "$pane" ]] || return 1
@@ -700,6 +759,7 @@ usage() {
   cat <<'EOF'
 Usage:
   pi-tmux bash <lock-name> [command...]
+  pi-tmux split [-h|-v] [-p <percent>] [-d] <lock-name> [command...]
   pi-tmux capture <lock-name|pane-id> [lines]
   pi-tmux send <lock-name|pane-id> [--no-enter] <text...>
   pi-tmux kill <lock-name|pane-id>
@@ -715,6 +775,7 @@ main() {
 
   case "$cmd" in
     bash) cmd_bash "$@" ;;
+    split) cmd_split "$@" ;;
     capture) cmd_capture "$@" ;;
     send) cmd_send "$@" ;;
     kill) cmd_kill "$@" ;;
